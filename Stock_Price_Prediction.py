@@ -16,22 +16,22 @@ import yfinance as yf
 
 #Define function to create the model
 def create_model(train_data, look_back):
-X, y = [], []
+  X, y = [], []
 for i in range(len(train_data)-look_back-1):
-a = train_data[i:(i+look_back), 0]
-X.append(a)
-y.append(train_data[i + look_back, 0])
-X_train, y_train = np.array(X), np.array(y)
+  a = train_data[i:(i+look_back), 0]
+  X.append(a)
+  y.append(train_data[i + look_back, 0])
+  X_train, y_train = np.array(X), np.array(y)
 
 # Reshape input data to be 3D [samples, timesteps, features]
-X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
+  X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
 
 # Create and fit the LSTM network
-model = Sequential()
-model.add(LSTM(units=4, input_shape=(None, 1)))
-model.add(Dense(units=1))
-model.compile(loss='mean_squared_error', optimizer='adam')
-model.fit(X_train, y_train, epochs=100, batch_size=1, verbose=2)
+  model = Sequential()
+  model.add(LSTM(units=4, input_shape=(None, 1)))
+  model.add(Dense(units=1))
+  model.compile(loss='mean_squared_error', optimizer='adam')
+  model.fit(X_train, y_train, epochs=100, batch_size=1, verbose=2)
 
 return model
 
