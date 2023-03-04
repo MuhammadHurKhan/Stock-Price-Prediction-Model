@@ -2,113 +2,96 @@
 # coding: utf-8
 
 # In[31]:
-import streamlit as st
-import yfinance as yf
-import datetime as dt
-import numpy as np
+Importing required libraries
+import math
 import pandas as pd
-import plotly.graph_objs as go
-from sklearn.preprocessing import MinMaxScaler
+import numpy as np
+import tensorflow as tf
 from keras.models import Sequential
 from keras.layers import Dense, LSTM
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error
+import streamlit as st
+import yfinance as yf
 
-# Set the page title and favicon
-st.set_page_config(page_title='Stock Price Prediction App', page_icon=':money_with_wings:')
+#Define function to create the model
+def create_model(train_data, look_back):
+X, y = [], []
+for i in range(len(train_data)-look_back-1):
+a = train_data[i:(i+look_back), 0]
+X.append(a)
+y.append(train_data[i + look_back, 0])
+X_train, y_train = np.array(X), np.array(y)
 
-# Define a function to get the stock data
-def get_data(ticker_symbol):
-    # Get the stock data
-    stock = yf.Ticker(ticker_symbol)
-    data = stock.history(period="max")
-    return data
-
-# Define a function to scale the data
-def scale_data(data):
-    # Scale the data
-    scaler = MinMaxScaler(feature_range=(0,1))
-    scaled_data = scaler.fit_transform(data)
-    return scaler, scaled_data
-
-# Define a function to get the last 7 days predictions
-def get_next_dates():
-    next_dates = []
-    today = dt.datetime.today()
-    for i in range(7):
-        next_dates.append(today + dt.timedelta(days=i))
-    next_dates = pd.DataFrame(next_dates)
-    next_dates.columns = ['Date']
-    return next_dates
-
-# Define a function to create the LSTM model
-def create_model(X_train):
-    model = Sequential()
-    model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1],1)))
-    model.add(LSTM(units=50))
-    model.add(Dense(1))
-    model.compile(optimizer='adam', loss='mean_squared_error')
-    return model
-
-# Define a function to train the LSTM model
-def train_model(model, X_train, y_train):
-    model.fit(X_train, y_train, epochs=1, batch_size=1, verbose=2)
-
-# Define a function to make predictions
-def make_predictions(model, X_test, scaler):
-    predictions = model.predict(X_test)
-    predictions = scaler.inverse_transform(predictions)
-    return predictions
-
-# Get the stock ticker from the user
-ticker_symbol = st.text_input('Enter Ticker Symbol', value='AAPL')
-
-# Get the stock data
-try:
-    data = get_data(ticker_symbol)
-except:
-    st.error('Invalid Ticker Symbol, please try again.')
-    st.stop()
-
-# Scale the data
-scaler, scaled_data = scale_data(data)
-
-# Get the last 7 days predictions
-next_dates = get_next_dates()
-last_60_days = data[-60:].values
-last_60_days_scaled = scaler.transform(last_60_days)
-X_test = []
-X_test.append(last_60_days_scaled)
-X_test = np.array(X_test)
-X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
-
-# Prepare the data for training
-train_data = scaled_data[:-60]
-X_train, y_train = [], []
-for i in range(60, len(train_data)):
-    X_train.append(train_data[i-60:i, 0])
-    y_train.append(train_data[i, 0])
-X_train, y_train = np.array(X_train), np.array(y_train)
+# Reshape input data to be 3D [samples, timesteps, features]
 X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
 
-# Load the LSTM model
-model = create_model(X_train)
+# Create and fit the LSTM network
+model = Sequential()
+model.add(LSTM(units=4, input_shape=(None, 1)))
+model.add(Dense(units=1))
+model.compile(loss='mean_squared_error', optimizer='adam')
+model.fit(X_train, y_train, epochs=100, batch_size=1, verbose=2)
 
-# Train the LSTM model
-train_model(model, X_train, y_train)
+return model
 
-# Make predictions
-predictions = make_predictions(model, X_test, scaler)
+#Get the stock symbol from user
+symbol = st.text_input('Enter stock symbol (e.g. AAPL for Apple Inc.):')
 
+#Load the dataset
+data = yf.download(symbol, period="10y")
+df = pd.DataFrame(data=data, columns=['Close'])
 
-# Plot the predicted prices
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=next_dates['Date'], y=predictions.flatten(),
-                    mode='lines+markers',
-                    name='Predicted Prices'))
-fig.update_layout(title=f"Predicted Prices for {ticker_symbol}",
-                  xaxis_title="Date",
-                  yaxis_title="Price")
-st.plotly_chart(fig)
+#Create a scaler to normalize the data
+scaler = MinMaxScaler(feature_range=(0,1))
 
+#Reshape the data to 1D
+close_price = df['Close'].values.reshape(-1,1)
+
+#Normalize the data
+scaled_close_price = scaler.fit_transform(close_price)
+
+#Define the train and test data
+train_size = int(len(scaled_close_price) * 0.67)
+test_size = len(scaled_close_price) - train_size
+train_data = scaled_close_price[0:train_size,:]
+test_data = scaled_close_price[train_size:len(scaled_close_price),:]
+
+#Define the number of previous days to use to predict the next day's closing price
+look_back = 30
+
+#Create and fit the LSTM model
+model = create_model(train_data, look_back)
+
+#Test the model
+X_test, y_test = [], []
+for i in range(len(test_data)-look_back-1):
+a = test_data[i:(i+look_back), 0]
+X_test.append(a)
+y_test.append(test_data[i + look_back, 0])
+X_test, y_test = np.array(X_test), np.array(y_test)
+
+#Reshape input data to be 3D [samples, timesteps, features]
+X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
+
+#Make predictions on test data
+predictions = model.predict(X_test)
+
+#Invert the predictions and actual values to their original scale
+predictions = scaler.inverse_transform(predictions)
+y_test = scaler.inverse_transform(y_test.reshape(-1, 1))
+
+#Calculate the mean squared error
+mse = mean_squared_error(y_test, predictions)
+
+#Calculate the root mean squared error
+rmse = math.sqrt(mse)
+
+#Plot the predicted vs. actual closing prices
+st.line_chart(pd.DataFrame({'Actual': y_test.reshape(-1), 'Predicted': predictions.reshape(-1)}))
+
+#Print the root mean squared error
+st.write('Root Mean Squared Error:', rmse)
 
 
 
