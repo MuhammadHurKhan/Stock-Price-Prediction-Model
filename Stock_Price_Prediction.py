@@ -2,7 +2,6 @@
 # coding: utf-8
 
 # In[31]:
-
 import streamlit as st
 import yfinance as yf
 import datetime as dt
@@ -41,7 +40,7 @@ def get_next_dates():
     return next_dates
 
 # Define a function to create the LSTM model
-def create_model():
+def create_model(X_train):
     model = Sequential()
     model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1],1)))
     model.add(LSTM(units=50))
@@ -81,14 +80,24 @@ X_test.append(last_60_days_scaled)
 X_test = np.array(X_test)
 X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
 
+# Prepare the data for training
+train_data = scaled_data[:-60]
+X_train, y_train = [], []
+for i in range(60, len(train_data)):
+    X_train.append(train_data[i-60:i, 0])
+    y_train.append(train_data[i, 0])
+X_train, y_train = np.array(X_train), np.array(y_train)
+X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
+
 # Load the LSTM model
-model = create_model()
+model = create_model(X_train)
 
 # Train the LSTM model
 train_model(model, X_train, y_train)
 
 # Make predictions
 predictions = make_predictions(model, X_test, scaler)
+
 
 # Plot the predicted prices
 fig = go.Figure()
