@@ -33,7 +33,7 @@ for i in range(len(train_data)-look_back-1):
   model.compile(loss='mean_squared_error', optimizer='adam')
   model.fit(X_train, y_train, epochs=100, batch_size=1, verbose=2)
 
-return model
+  return model
 
 #Get the stock symbol from user
 symbol = st.text_input('Enter stock symbol (e.g. AAPL for Apple Inc.):')
