@@ -28,7 +28,7 @@ def main():
 
     # Load the data using yfinance
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(yf.download, ticker, period="6M")
+        future = executor.submit(yf.download, ticker, period="1y")
         data = future.result()
 
     # Sort the data by date
@@ -53,7 +53,7 @@ def main():
     # Split the data into x_train and y_train datasets
     x_train = []
     y_train = []
-    time_steps = 120
+    time_steps = 60
 
     for i in range(time_steps, len(train_data)):
         x_train.append(train_data[i - time_steps:i, 0])
@@ -63,7 +63,7 @@ def main():
     x_train, y_train = np.array(x_train), np.array(y_train)
 
     # Reshape the data
-    x_train = np.reshape(x_train, (x_train.shape[1], x_train.shape[0], 1))
+    x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
 
     # Build the LSTM model
     model = Sequential()
