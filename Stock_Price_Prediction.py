@@ -66,32 +66,32 @@ model = create_model(train_data, look_back)
 #Test the model
 X_test, y_test = [], []
 for i in range(len(test_data)-look_back-1):
-a = test_data[i:(i+look_back), 0]
-X_test.append(a)
-y_test.append(test_data[i + look_back, 0])
-X_test, y_test = np.array(X_test), np.array(y_test)
+  a = test_data[i:(i+look_back), 0]
+  X_test.append(a)
+  y_test.append(test_data[i + look_back, 0])
+  X_test, y_test = np.array(X_test), np.array(y_test)
 
 #Reshape input data to be 3D [samples, timesteps, features]
-X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
+  X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
 
 #Make predictions on test data
-predictions = model.predict(X_test)
+  predictions = model.predict(X_test)
 
 #Invert the predictions and actual values to their original scale
-predictions = scaler.inverse_transform(predictions)
-y_test = scaler.inverse_transform(y_test.reshape(-1, 1))
+  predictions = scaler.inverse_transform(predictions)
+  y_test = scaler.inverse_transform(y_test.reshape(-1, 1))
 
 #Calculate the mean squared error
-mse = mean_squared_error(y_test, predictions)
+  mse = mean_squared_error(y_test, predictions)
 
 #Calculate the root mean squared error
-rmse = math.sqrt(mse)
+  rmse = math.sqrt(mse)
 
 #Plot the predicted vs. actual closing prices
-st.line_chart(pd.DataFrame({'Actual': y_test.reshape(-1), 'Predicted': predictions.reshape(-1)}))
+  st.line_chart(pd.DataFrame({'Actual': y_test.reshape(-1), 'Predicted': predictions.reshape(-1)}))
 
 #Print the root mean squared error
-st.write('Root Mean Squared Error:', rmse)
+  st.write('Root Mean Squared Error:', rmse)
 
 
 
