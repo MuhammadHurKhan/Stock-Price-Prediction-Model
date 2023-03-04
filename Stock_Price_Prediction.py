@@ -92,7 +92,7 @@ def main():
     x_test = np.array(x_test)
 
     # Reshape the data
-    x_test = np.reshape(x_test, (x_test.shape[1], x_test.shape[0], 1))
+    x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], 1))
 
     # Get the model's predicted price values
     predictions = model.predict(x_test)
