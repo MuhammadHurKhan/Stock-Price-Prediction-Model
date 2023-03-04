@@ -2,6 +2,7 @@
 # coding: utf-8
 
 # In[31]:
+
 import math
 import pandas as pd
 import numpy as np
