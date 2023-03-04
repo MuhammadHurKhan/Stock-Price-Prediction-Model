@@ -5,97 +5,80 @@
 
 import yfinance as yf
 import streamlit as st
+from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, LSTM
-from sklearn.preprocessing import MinMaxScaler
-import plotly.graph_objs as go
 
-# Set page title and favicon
-st.set_page_config(page_title='Stock Price Prediction', page_icon=':money_with_wings:')
+def search_stock(query):
+    stock = yf.Ticker(query)
+    return stock.info['symbol']
 
-# Define function to preprocess the data
-def preprocess_data(stock_data):
-    data = pd.DataFrame(stock_data)
-    data['Date'] = pd.to_datetime(data.Date, format='%Y-%m-%d')
-    data.index = data['Date']
-    data.drop('Date', axis=1, inplace=True)
-    scaler = MinMaxScaler()
-    scaled_data = scaler.fit_transform(data)
-    x_train, y_train = [], []
-    for i in range(60,len(data)):
-        x_train.append(scaled_data[i-60:i,0])
-        y_train.append(scaled_data[i,0])
-    x_train, y_train = np.array(x_train), np.array(y_train)
-    x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
-    return x_train, y_train, scaler
+def get_stock_data(ticker_symbol, days):
+    today = datetime.today().strftime('%Y-%m-%d')
+    start_date = (datetime.today() - timedelta(days=days)).strftime('%Y-%m-%d')
+    stock_data = yf.download(ticker_symbol, start=start_date, end=today)
+    return stock_data
 
-# Define function to create the LSTM model
-def create_model(x_train):
+def predict_stock_price(stock_data, days):
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    scaled_data = scaler.fit_transform(stock_data['Close'].values.reshape(-1, 1))
+    
+    prediction_days = 7
+    x_test = []
+    for x in range(prediction_days, len(scaled_data)):
+        x_test.append(scaled_data[x-prediction_days:x, 0])
+    x_test = np.array(x_test)
+    x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], 1))
+    
     model = Sequential()
-    model.add(LSTM(units=50, return_sequences=True, input_shape=(x_train.shape[1],1)))
+    model.add(LSTM(units=50, return_sequences=True, input_shape=(x_test.shape[1], 1)))
+    model.add(LSTM(units=50, return_sequences=True))
     model.add(LSTM(units=50))
-    model.add(Dense(1))
-    model.compile(loss='mean_squared_error', optimizer='adam')
-    return model
-
-# Define function to make the prediction
-def make_prediction(model, x_train, scaler, days):
-    prediction_data = x_train[-1]
+    model.add(Dense(units=1))
+    
+    model.compile(optimizer='adam', loss='mean_squared_error')
+    model.fit(x_train, y_train, epochs=25, batch_size=32)
+    
+    last_date = stock_data.iloc[-1].name
+    next_dates = [last_date + timedelta(days=i) for i in range(1, 8)]
+    next_dates_formatted = [date.strftime('%Y-%m-%d') for date in next_dates]
+    
     predicted_prices = []
-    for _ in range(days):
-        prediction = model.predict(prediction_data.reshape(1,60,1))
-        predicted_price = scaler.inverse_transform(prediction)[0][0]
-        predicted_prices.append(predicted_price)
-        prediction_data = np.append(prediction_data[1:], prediction[0])
-    return predicted_prices
+    for i in range(7):
+        x_input = scaled_data[-prediction_days:]
+        x_input = np.reshape(x_input, (1, prediction_days, 1))
+        y_pred = model.predict(x_input)
+        y_pred = scaler.inverse_transform(y_pred)
+        predicted_prices.append(y_pred[0][0])
+        scaled_data = np.vstack((scaled_data, y_pred))
+    
+    return next_dates_formatted, predicted_prices
 
-# Set up the app layout
-st.title("Stock Price Prediction")
-st.sidebar.header("Enter the Stock Ticker")
-ticker = st.sidebar.text_input("Ticker", "AAPL")
+st.title("Stock Price Prediction App")
 
-# Fetch the data
-stock_data = yf.download(ticker, start="2010-01-01", end="2022-01-01")
+search_query = st.text_input("Search for a stock by name:")
+if search_query:
+    ticker_symbol = search_stock(search_query)
+    if not ticker_symbol:
+        st.error("Sorry, no stock found for the given search query.")
+    else:
+        st.success(f"Ticker symbol for {search_query}: {ticker_symbol}")
+        num_days = st.slider("Select the number of days of historical data to use:", min_value=30, max_value=365, value=90)
+        stock_data = get_stock_data(ticker_symbol, num_days)
+        next_dates, predicted_prices = predict_stock_price(stock_data, num_days)
 
-# Preprocess the data
-x_train, y_train, scaler = preprocess_data(stock_data)
+        st.subheader("Expected Stock Prices for the Next 7 Days")
+        st.table(pd.DataFrame({'Date': next_dates, 'Price': predicted_prices}))
 
-# Create the LSTM model
-model = create_model(x_train)
+       # Add line chart for predicted prices
+        st.subheader("Predicted Prices for the Next 7 Days")
+        df = pd.DataFrame({'Date': next_dates_formatted, 'Price': predicted_prices})
+        df.set_index('Date', inplace=True)
+        st.line_chart(df)
 
-# Train the model
-model.fit(x_train, y_train, epochs=1, batch_size=1, verbose=2)
-
-# Make the prediction
-days = 7
-predicted_prices = make_prediction(model, x_train, scaler, days)
-
-# Create the plot
-data = stock_data.filter(['Close'])
-last_date = data.index[-1]
-date_range = pd.date_range(last_date, periods=days+1, freq='B')
-date_range = date_range[1:]
-predicted_data = pd.DataFrame(data=predicted_prices, index=date_range, columns=['Prediction'])
-data = pd.concat([data, predicted_data], axis=0)
-
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=data.index, y=data['Close'], name='Actual Price'))
-fig.add_trace(go.Scatter(x=data.index, y=data['Prediction'], name='Predicted Price'))
-
-#Update the plot layout
-fig.update_layout(title=f"Stock Price Prediction for {ticker.upper()}",
-xaxis_title="Date",
-yaxis_title="Stock Price ($)")
-
-#Plot the predicted values
-fig.add_trace(go.Scatter(x=future_dates, y=predictions.flatten(),
-mode="lines",
-name="Predicted Price"))
-
-#Show the plot
-st.plotly_chart(fig)
 
 
 
